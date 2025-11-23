@@ -1,7 +1,41 @@
 [project]
 name = "pdf-mcpserver"
 version = "0.1.0"
-description = "Add your description here"
+description = "MCP Server for querying PDF documents using AI-powered RAG"
 readme = "README.md"
-requires-python = ">=3.13"
-dependencies = []
+requires-python = ">=3.11"
+dependencies = [
+    # MCP Server Framework
+    "fastmcp>=0.1.0",
+    
+    # Document Processing & RAG
+    "docling==2.15.0",
+    "docling-core==2.16.0",
+    "docling-parse==3.1.2",
+    "chromadb==0.6.3",
+    "langchain==0.3.16",
+    "langchain-openai==0.3.2",
+    "langchain-community==0.3.16",
+    "langchain-text-splitters==0.3.5",
+    
+    # Retrieval
+    "rank-bm25==0.2.2",
+    
+    # LLM Provider
+    "openai==1.60.2",
+    
+    # Configuration & Utilities
+    "python-dotenv==1.0.1",
+    "pydantic==2.10.6",
+    "pydantic-settings==2.7.1",
+    
+    # Logging
+    "loguru==0.7.3",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.0.0",
+    "pytest>=7.0.0",
+]
+
