@@ -12,6 +12,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = ""
 from docling.document_converter import DocumentConverter
 from langchain_text_splitters import MarkdownHeaderTextSplitter
 from langchain_community.vectorstores import Chroma
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.retrievers import BM25Retriever
 from langchain.retrievers import EnsembleRetriever
 from loguru import logger
@@ -32,7 +33,7 @@ class PDFProcessor:
     Uses docling for PDF parsing, ChromaDB for vector storage,
     and hybrid retrieval (BM25 + Vector Search).
     
-    Uses ChromaDB's default free embeddings (no OpenAI required).
+    Uses free HuggingFace embeddings (sentence-transformers).
     """
     
     _instance: Optional['PDFProcessor'] = None
@@ -50,11 +51,17 @@ class PDFProcessor:
             return
             
         self.headers = MARKDOWN_HEADERS
+        # Use free HuggingFace embeddings (sentence-transformers)
+        self.embeddings = HuggingFaceEmbeddings(
+            model_name="all-MiniLM-L6-v2",
+            model_kwargs={'device': 'cpu'},
+            encode_kwargs={'normalize_embeddings': True}
+        )
         self.chunks: List = []
         self.hybrid_retriever: Optional[EnsembleRetriever] = None
         self._initialized = True
         
-        logger.info("PDFProcessor initialized (using free ChromaDB embeddings)")
+        logger.info("PDFProcessor initialized (using free HuggingFace embeddings)")
     
     @staticmethod
     def clear_vector_db():
@@ -141,13 +148,13 @@ class PDFProcessor:
     def _build_hybrid_retriever(self) -> None:
         """Build a hybrid retriever using BM25 and vector-based retrieval."""
         try:
-            # Create Chroma vector store with default free embeddings
-            # ChromaDB will use sentence-transformers (all-MiniLM-L6-v2) by default
+            # Create Chroma vector store with free HuggingFace embeddings
             vector_store = Chroma.from_documents(
                 documents=self.chunks,
+                embedding=self.embeddings,
                 persist_directory=str(config.CHROMA_DB_DIR)
             )
-            logger.info("Vector store created with free ChromaDB embeddings")
+            logger.info("Vector store created with free HuggingFace embeddings")
             
             # Create BM25 retriever
             bm25 = BM25Retriever.from_documents(self.chunks)

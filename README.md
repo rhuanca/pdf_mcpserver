@@ -37,24 +37,7 @@ This will automatically:
 - Install all dependencies from `pyproject.toml`
 - Set up the project
 
-### 3. Configure Environment
-
-Copy the example environment file and add your OpenAI API key:
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` and set your OpenAI API key:
-
-```env
-OPENAI_API_KEY=your_openai_api_key_here
-PDF_DOCUMENTS_DIR=./documents
-CHROMA_DB_DIR=./chroma_db
-LOG_LEVEL=INFO
-```
-
-### 5. Add PDF Documents
+### 3. Add PDF Documents
 
 Create a `documents` directory and add your PDF files:
 
@@ -62,6 +45,8 @@ Create a `documents` directory and add your PDF files:
 mkdir documents
 # Copy your PDF files to the documents/ directory
 ```
+
+That's it! No API keys or additional configuration needed.
 
 ## 🎯 Usage
 
@@ -144,6 +129,47 @@ Server returns: 3 relevant chunks from PDFs
 Agent reads chunks and generates answer for user
 ```
 
+## 🔍 Testing with MCP Inspector
+
+The MCP Inspector is a web-based tool for testing and debugging MCP servers interactively.
+
+### Running the Inspector
+
+```bash
+npx @modelcontextprotocol/inspector uv run python main.py
+```
+
+This command will:
+1. Start the MCP Inspector proxy server
+2. Launch your PDF Retrieval Server
+3. Open a web browser with the Inspector UI
+
+### What You'll See
+
+The Inspector provides:
+- **Tool Discovery**: View available tools (`retrieve_pdf_chunks`)
+- **Interactive Testing**: Test queries with custom parameters
+- **Real-time Responses**: See JSON responses in real-time
+- **Request/Response Logs**: Debug the MCP protocol communication
+
+### Example Inspector Workflow
+
+1. **Open the Inspector** - Browser opens automatically at `http://localhost:6274`
+2. **Wait for Initialization** - Server loads and indexes PDFs on first query (~1-2 minutes)
+3. **Select Tool** - Click on `retrieve_pdf_chunks` in the tools list
+4. **Enter Query** - Type your search query (e.g., "machine learning")
+5. **Set Parameters** - Optionally adjust `max_chunks` (default: 5)
+6. **Execute** - Click "Run" to see the results
+7. **View Response** - Inspect the returned chunks and metadata
+
+### Inspector Tips
+
+- **First query is slow**: PDF indexing happens on first query (87 seconds for typical PDFs)
+- **Subsequent queries are fast**: Embeddings are cached in ChromaDB
+- **Fresh start**: Server clears ChromaDB on each restart for clean indexing
+- **Check logs**: Terminal shows detailed logging of the indexing process
+
+
 ## 🏗️ Architecture
 
 ```
@@ -203,17 +229,17 @@ uv run pytest tests/
 
 **Solution**: Add PDF files to the `documents/` directory or update `PDF_DOCUMENTS_DIR` in `.env`
 
-### OpenAI API key missing
-
-**Error**: `OPENAI_API_KEY is required`
-
-**Solution**: Set your OpenAI API key in the `.env` file
-
 ### Import errors
 
 **Error**: `ModuleNotFoundError: No module named 'docling'`
 
 **Solution**: Ensure all dependencies are installed: `uv sync`
+
+### CUDA out of memory
+
+**Error**: `CUDA out of memory`
+
+**Solution**: The server is configured to use CPU-only mode. If you still see this error, check that `CUDA_VISIBLE_DEVICES=""` is set in `src/pdf_processor.py`
 
 ## 📚 Dependencies
 
