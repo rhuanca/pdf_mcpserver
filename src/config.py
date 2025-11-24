@@ -2,7 +2,6 @@
 
 import os
 from pathlib import Path
-from typing import Optional
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -11,9 +10,6 @@ load_dotenv()
 
 class Config:
     """Centralized configuration management using environment variables."""
-    
-    # OpenAI Configuration
-    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     
     # PDF Documents Directory
     PDF_DOCUMENTS_DIR: Path = Path(os.getenv("PDF_DOCUMENTS_DIR", "./documents"))
@@ -32,11 +28,6 @@ class Config:
         Raises:
             ValueError: If required configuration is missing or invalid.
         """
-        if not cls.OPENAI_API_KEY:
-            raise ValueError(
-                "OPENAI_API_KEY is required. Please set it in your .env file."
-            )
-        
         if not cls.PDF_DOCUMENTS_DIR.exists():
             raise ValueError(
                 f"PDF_DOCUMENTS_DIR does not exist: {cls.PDF_DOCUMENTS_DIR}. "

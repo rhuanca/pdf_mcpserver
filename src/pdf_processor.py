@@ -2,6 +2,7 @@
 
 import os
 import hashlib
+import shutil
 from pathlib import Path
 from typing import List, Optional
 
@@ -11,7 +12,6 @@ os.environ["CUDA_VISIBLE_DEVICES"] = ""
 from docling.document_converter import DocumentConverter
 from langchain_text_splitters import MarkdownHeaderTextSplitter
 from langchain_community.vectorstores import Chroma
-from langchain_openai import OpenAIEmbeddings
 from langchain_community.retrievers import BM25Retriever
 from langchain.retrievers import EnsembleRetriever
 from loguru import logger
@@ -22,7 +22,6 @@ from src.constants import (
     VECTOR_SEARCH_TOP_K,
     HYBRID_RETRIEVER_WEIGHTS,
     MARKDOWN_HEADERS,
-    EMBEDDING_MODEL
 )
 
 
@@ -32,6 +31,8 @@ class PDFProcessor:
     
     Uses docling for PDF parsing, ChromaDB for vector storage,
     and hybrid retrieval (BM25 + Vector Search).
+    
+    Uses ChromaDB's default free embeddings (no OpenAI required).
     """
     
     _instance: Optional['PDFProcessor'] = None
@@ -49,15 +50,21 @@ class PDFProcessor:
             return
             
         self.headers = MARKDOWN_HEADERS
-        self.embeddings = OpenAIEmbeddings(
-            model=EMBEDDING_MODEL,
-            openai_api_key=config.OPENAI_API_KEY
-        )
         self.chunks: List = []
         self.hybrid_retriever: Optional[EnsembleRetriever] = None
         self._initialized = True
         
-        logger.info("PDFProcessor initialized")
+        logger.info("PDFProcessor initialized (using free ChromaDB embeddings)")
+    
+    @staticmethod
+    def clear_vector_db():
+        """Clear the ChromaDB directory for a fresh start."""
+        if config.CHROMA_DB_DIR.exists():
+            try:
+                shutil.rmtree(config.CHROMA_DB_DIR)
+                logger.info(f"Cleared vector database: {config.CHROMA_DB_DIR}")
+            except Exception as e:
+                logger.warning(f"Failed to clear vector database: {e}")
     
     def load_and_index_pdfs(self) -> None:
         """
@@ -134,13 +141,13 @@ class PDFProcessor:
     def _build_hybrid_retriever(self) -> None:
         """Build a hybrid retriever using BM25 and vector-based retrieval."""
         try:
-            # Create Chroma vector store
+            # Create Chroma vector store with default free embeddings
+            # ChromaDB will use sentence-transformers (all-MiniLM-L6-v2) by default
             vector_store = Chroma.from_documents(
                 documents=self.chunks,
-                embedding=self.embeddings,
                 persist_directory=str(config.CHROMA_DB_DIR)
             )
-            logger.info("Vector store created successfully")
+            logger.info("Vector store created with free ChromaDB embeddings")
             
             # Create BM25 retriever
             bm25 = BM25Retriever.from_documents(self.chunks)

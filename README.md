@@ -1,19 +1,21 @@
 # PDF Retrieval MCP Server
 
-A Model Context Protocol (MCP) server for retrieving relevant chunks from PDF documents using hybrid search (BM25 + Vector Search).
+A **completely free** Model Context Protocol (MCP) server for retrieving relevant chunks from PDF documents using hybrid search (BM25 + Vector Search).
 
 ## 🚀 Features
 
 - **PDF Document Processing**: Automatic parsing and indexing of PDF files using Docling
 - **Hybrid Retrieval**: Combines BM25 (keyword) and vector search (semantic) for accurate retrieval
+- **Free Embeddings**: Uses ChromaDB's default sentence-transformers (no API costs!)
 - **Pure Retrieval Mode**: Returns raw document chunks for agent processing (no LLM answer generation)
+- **Fresh Start**: Clears vector database on each startup for clean indexing
 - **MCP Integration**: Exposes `retrieve_pdf_chunks` tool via FastMCP for seamless agent integration
 
 ## 📋 Prerequisites
 
 - Python 3.11 or later
-- OpenAI API key (for embeddings only)
 - PDF documents to index
+- **No API keys required!** ✨
 
 ## 🛠️ Installation
 
@@ -160,27 +162,30 @@ pdf_mcpserver/
 ### Key Components
 
 - **PDFProcessor**: Singleton class that loads PDFs, converts to Markdown using Docling, and builds hybrid retriever (BM25 + Vector Search)
-- **RetrievalHandler**: Retrieves relevant chunks for queries - no LLM answer generation
-- **FastMCP**: MCP server framework that exposes the `retrieve_pdf_chunks` tool
+- **RetrievalHandler**: Retrieves relevant chunks for queries - no LLM answer## 🔧 Configuration
 
-### Why Pure Retrieval?
+Configuration is managed through environment variables. Create a `.env` file in the project root:
 
-This design allows calling agents (Claude, GPT, etc.) to:
-- Use their own LLM for answer generation
-- Have full control over the reasoning process
-- Avoid redundant LLM calls
-- Reduce costs and latency
+```bash
+# Optional: PDF Documents Directory (defaults to ./documents)
+PDF_DOCUMENTS_DIR=./documents
 
-## 🔧 Configuration
+# Optional: ChromaDB Directory (defaults to ./chroma_db)
+CHROMA_DB_DIR=./chroma_db
 
-### Environment Variables
+# Optional: Log Level (defaults to INFO)
+LOG_LEVEL=INFO
+```
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OPENAI_API_KEY` | (required) | Your OpenAI API key |
-| `PDF_DOCUMENTS_DIR` | `./documents` | Directory containing PDF files |
-| `CHROMA_DB_DIR` | `./chroma_db` | ChromaDB storage directory |
-| `LOG_LEVEL` | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR) |
+### Configuration Options
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `PDF_DOCUMENTS_DIR` | No | `./documents` | Directory containing PDF files to index |
+| `CHROMA_DB_DIR` | No | `./chroma_db` | Directory for ChromaDB vector storage |
+| `LOG_LEVEL` | No | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR) |
+
+**Note**: No API keys required! ChromaDB uses free local embeddings (sentence-transformers).
 
 ## 🧪 Testing
 
@@ -214,10 +219,11 @@ uv run pytest tests/
 
 - **fastmcp**: MCP server framework
 - **docling**: Document processing and parsing
-- **chromadb**: Vector database for embeddings
+- **chromadb**: Vector database with free sentence-transformers embeddings
 - **langchain**: RAG framework and retrievers
-- **openai**: Embeddings only (text-embedding-3-small)
 - **loguru**: Logging
+
+**No paid APIs required!** All embeddings are generated locally using ChromaDB's default model (all-MiniLM-L6-v2).
 
 ## 🤝 Contributing
 

@@ -10,11 +10,6 @@ HYBRID_RETRIEVER_WEIGHTS = [0.5, 0.5]  # [BM25, Vector]
 MAX_CHUNK_PREVIEW_LENGTH = 200
 MARKDOWN_HEADERS = [("#", "Header 1"), ("##", "Header 2")]
 
-# LLM Configuration
-LLM_MODEL = "gpt-4o-mini"
-LLM_TEMPERATURE = 0.1
-EMBEDDING_MODEL = "text-embedding-3-small"
-
 # Confidence Scoring
 BASE_CONFIDENCE = 0.5
 CONFIDENCE_LONG_ANSWER_THRESHOLD = 100

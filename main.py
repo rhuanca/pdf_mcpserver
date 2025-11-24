@@ -95,6 +95,10 @@ def initialize_server():
         logger.info("PDF Retrieval Server - Initializing (first query)")
         logger.info("=" * 60)
         
+        # Clear vector database for fresh start
+        logger.info("Clearing vector database for fresh start...")
+        PDFProcessor.clear_vector_db()
+        
         # Validate configuration
         logger.info("Validating configuration...")
         config.validate()
