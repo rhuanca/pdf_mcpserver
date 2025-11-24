@@ -1,6 +1,6 @@
 """Query processing and structured response generation."""
 
-from typing import List, Optional
+from typing import List
 from langchain_openai import ChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
 from loguru import logger
@@ -8,6 +8,15 @@ from loguru import logger
 from src.models import QueryResponse, Source
 from src.pdf_processor import PDFProcessor
 from src.config import config
+from src.constants import (
+    DEFAULT_CHUNK_LIMIT,
+    LLM_MODEL,
+    LLM_TEMPERATURE,
+    MAX_CHUNK_PREVIEW_LENGTH,
+    SYSTEM_PROMPT,
+    NO_CHUNKS_FOUND_MESSAGE
+)
+from src.confidence import estimate_confidence
 
 
 class QueryHandler:
@@ -26,11 +35,11 @@ class QueryHandler:
         """
         self.pdf_processor = pdf_processor
         self.llm = ChatOpenAI(
-            model="gpt-4o-mini",
-            temperature=0.1,
+            model=LLM_MODEL,
+            temperature=LLM_TEMPERATURE,
             openai_api_key=config.OPENAI_API_KEY
         )
-        logger.info("QueryHandler initialized with gpt-4o-mini")
+        logger.info(f"QueryHandler initialized with {LLM_MODEL}")
     
     def query(self, question: str) -> QueryResponse:
         """
@@ -45,38 +54,19 @@ class QueryHandler:
         Raises:
             ValueError: If question is empty or invalid.
         """
-        if not question or not question.strip():
-            raise ValueError("Question cannot be empty")
-        
+        self._validate_question(question)
         question = question.strip()
         logger.info(f"Processing query: {question}")
         
         try:
-            # Retrieve relevant chunks
-            relevant_chunks = self.pdf_processor.retrieve_relevant_chunks(
-                query=question,
-                k=5
-            )
+            relevant_chunks = self._retrieve_chunks(question)
             
             if not relevant_chunks:
-                logger.warning("No relevant chunks found")
-                return QueryResponse(
-                    answer="I couldn't find any relevant information in the documents to answer your question.",
-                    sources=[],
-                    confidence_score=0.0
-                )
+                return self._create_no_results_response()
             
-            # Build context from chunks
-            context = self._build_context(relevant_chunks)
-            
-            # Generate answer using LLM
-            answer = self._generate_answer(question, context)
-            
-            # Extract sources
+            answer = self._generate_answer(question, relevant_chunks)
             sources = self._extract_sources(relevant_chunks)
-            
-            # Estimate confidence (simple heuristic)
-            confidence = self._estimate_confidence(answer, len(relevant_chunks))
+            confidence = estimate_confidence(answer, len(relevant_chunks))
             
             response = QueryResponse(
                 answer=answer,
@@ -90,6 +80,53 @@ class QueryHandler:
         except Exception as e:
             logger.error(f"Error processing query: {e}")
             raise
+    
+    def _validate_question(self, question: str) -> None:
+        """Validate that question is not empty."""
+        if not question or not question.strip():
+            raise ValueError("Question cannot be empty")
+    
+    def _retrieve_chunks(self, question: str) -> List:
+        """Retrieve relevant chunks for the question."""
+        chunks = self.pdf_processor.retrieve_relevant_chunks(
+            query=question,
+            k=DEFAULT_CHUNK_LIMIT
+        )
+        
+        if not chunks:
+            logger.warning("No relevant chunks found")
+        
+        return chunks
+    
+    def _create_no_results_response(self) -> QueryResponse:
+        """Create response when no relevant chunks are found."""
+        return QueryResponse(
+            answer=NO_CHUNKS_FOUND_MESSAGE,
+            sources=[],
+            confidence_score=0.0
+        )
+    
+    def _generate_answer(self, question: str, chunks: List) -> str:
+        """
+        Generate an answer using the LLM.
+        
+        Args:
+            question: The user's question.
+            chunks: Retrieved document chunks.
+            
+        Returns:
+            Generated answer.
+        """
+        context = self._build_context(chunks)
+        user_prompt = self._build_user_prompt(question, context)
+        
+        messages = [
+            SystemMessage(content=SYSTEM_PROMPT),
+            HumanMessage(content=user_prompt)
+        ]
+        
+        response = self.llm.invoke(messages)
+        return response.content.strip()
     
     def _build_context(self, chunks: List) -> str:
         """
@@ -109,40 +146,14 @@ class QueryHandler:
         
         return "\n".join(context_parts)
     
-    def _generate_answer(self, question: str, context: str) -> str:
-        """
-        Generate an answer using the LLM.
-        
-        Args:
-            question: The user's question.
-            context: Retrieved context from documents.
-            
-        Returns:
-            Generated answer.
-        """
-        system_prompt = """You are a helpful assistant that answers questions based on the provided document context.
-
-Instructions:
-- Answer the question using ONLY the information from the provided context
-- If the context doesn't contain enough information, say so clearly
-- Be concise and accurate
-- Cite specific sources when possible
-- Do not make up information not present in the context"""
-
-        user_prompt = f"""Context from documents:
+    def _build_user_prompt(self, question: str, context: str) -> str:
+        """Build the user prompt with context and question."""
+        return f"""Context from documents:
 {context}
 
 Question: {question}
 
 Answer:"""
-
-        messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=user_prompt)
-        ]
-        
-        response = self.llm.invoke(messages)
-        return response.content.strip()
     
     def _extract_sources(self, chunks: List) -> List[Source]:
         """
@@ -168,10 +179,10 @@ Answer:"""
             
             seen_sources.add(source_key)
             
-            # Truncate chunk text for readability
-            chunk_text = chunk.page_content[:200]
-            if len(chunk.page_content) > 200:
-                chunk_text += "..."
+            chunk_text = self._truncate_text(
+                chunk.page_content,
+                MAX_CHUNK_PREVIEW_LENGTH
+            )
             
             sources.append(Source(
                 document_name=source_name,
@@ -181,48 +192,9 @@ Answer:"""
         
         return sources
     
-    def _estimate_confidence(self, answer: str, num_chunks: int) -> float:
-        """
-        Estimate confidence score based on simple heuristics.
-        
-        Args:
-            answer: Generated answer.
-            num_chunks: Number of retrieved chunks.
-            
-        Returns:
-            Confidence score between 0.0 and 1.0.
-        """
-        # Simple heuristic based on:
-        # 1. Answer length (longer = more confident)
-        # 2. Number of chunks (more = more confident)
-        # 3. Presence of uncertainty phrases
-        
-        confidence = 0.5  # Base confidence
-        
-        # Adjust based on answer length
-        if len(answer) > 100:
-            confidence += 0.2
-        elif len(answer) < 30:
-            confidence -= 0.2
-        
-        # Adjust based on number of chunks
-        if num_chunks >= 3:
-            confidence += 0.2
-        elif num_chunks == 1:
-            confidence -= 0.1
-        
-        # Check for uncertainty phrases
-        uncertainty_phrases = [
-            "i don't know",
-            "i couldn't find",
-            "not enough information",
-            "unclear",
-            "uncertain"
-        ]
-        
-        answer_lower = answer.lower()
-        if any(phrase in answer_lower for phrase in uncertainty_phrases):
-            confidence -= 0.3
-        
-        # Clamp to [0.0, 1.0]
-        return max(0.0, min(1.0, confidence))
+    @staticmethod
+    def _truncate_text(text: str, max_length: int) -> str:
+        """Truncate text to max_length with ellipsis if needed."""
+        if len(text) <= max_length:
+            return text
+        return text[:max_length] + "..."

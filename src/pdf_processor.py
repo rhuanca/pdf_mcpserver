@@ -17,6 +17,13 @@ from langchain.retrievers import EnsembleRetriever
 from loguru import logger
 
 from src.config import config
+from src.constants import (
+    BM25_TOP_K,
+    VECTOR_SEARCH_TOP_K,
+    HYBRID_RETRIEVER_WEIGHTS,
+    MARKDOWN_HEADERS,
+    EMBEDDING_MODEL
+)
 
 
 class PDFProcessor:
@@ -41,9 +48,9 @@ class PDFProcessor:
         if self._initialized:
             return
             
-        self.headers = [("#", "Header 1"), ("##", "Header 2")]
+        self.headers = MARKDOWN_HEADERS
         self.embeddings = OpenAIEmbeddings(
-            model="text-embedding-3-small",
+            model=EMBEDDING_MODEL,
             openai_api_key=config.OPENAI_API_KEY
         )
         self.chunks: List = []
@@ -137,20 +144,19 @@ class PDFProcessor:
             
             # Create BM25 retriever
             bm25 = BM25Retriever.from_documents(self.chunks)
-            bm25.k = 3  # Return top 3 results
+            bm25.k = BM25_TOP_K
             logger.info("BM25 retriever created successfully")
             
             # Create vector-based retriever
             vector_retriever = vector_store.as_retriever(
-                search_kwargs={"k": 3}
+                search_kwargs={"k": VECTOR_SEARCH_TOP_K}
             )
             logger.info("Vector retriever created successfully")
             
             # Combine retrievers into a hybrid retriever
-            # Weights: [BM25, Vector] - equal weighting
             self.hybrid_retriever = EnsembleRetriever(
                 retrievers=[bm25, vector_retriever],
-                weights=[0.5, 0.5]
+                weights=HYBRID_RETRIEVER_WEIGHTS
             )
             logger.info("Hybrid retriever created successfully")
             
