@@ -1,8 +1,13 @@
 """PDF processing and indexing using docling and ChromaDB."""
 
+import os
 import hashlib
 from pathlib import Path
 from typing import List, Optional
+
+# Force CPU-only processing to avoid GPU memory issues
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
 from docling.document_converter import DocumentConverter
 from langchain_text_splitters import MarkdownHeaderTextSplitter
 from langchain_community.vectorstores import Chroma

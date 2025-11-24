@@ -50,10 +50,10 @@ def query_pdf(question: str) -> str:
         }
     """
     try:
+        # Lazy initialization on first query
         if query_handler is None:
-            raise RuntimeError(
-                "Server not properly initialized. PDF processor is not ready."
-            )
+            logger.info("First query received - initializing server...")
+            initialize_server()
         
         # Process query
         response = query_handler.query(question)
@@ -70,12 +70,16 @@ def query_pdf(question: str) -> str:
 
 
 def initialize_server():
-    """Initialize PDF processor and query handler at startup."""
+    """Initialize PDF processor and query handler (lazy - called on first query)."""
     global pdf_processor, query_handler
+    
+    if query_handler is not None:
+        # Already initialized
+        return
     
     try:
         logger.info("=" * 60)
-        logger.info("PDF MCP Server - Initializing")
+        logger.info("PDF MCP Server - Initializing (first query)")
         logger.info("=" * 60)
         
         # Validate configuration
@@ -102,14 +106,16 @@ def initialize_server():
         
     except Exception as e:
         logger.error(f"Failed to initialize server: {e}")
-        logger.error("Server startup aborted")
-        sys.exit(1)
+        raise
 
 
 if __name__ == "__main__":
-    # Initialize server components
-    initialize_server()
+    logger.info("=" * 60)
+    logger.info("PDF MCP Server - Starting")
+    logger.info("PDF documents will be loaded on first query")
+    logger.info("=" * 60)
     
-    # Run MCP server
+    # Run MCP server immediately (lazy initialization)
     mcp.run()
+
 
