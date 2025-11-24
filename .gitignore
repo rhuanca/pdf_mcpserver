@@ -45,6 +45,11 @@ chroma_db/
 *.db
 *.sqlite
 
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
 # Documents (optional - uncomment if you don't want to track PDFs)
 # documents/
 # *.pdf
