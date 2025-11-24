@@ -1,4 +1,4 @@
-"""MCP Server for querying PDF documents."""
+"""MCP Server for retrieving relevant chunks from PDF documents."""
 
 import sys
 from mcp.server.fastmcp import FastMCP
@@ -6,7 +6,7 @@ from loguru import logger
 
 from src.config import config
 from src.pdf_processor import PDFProcessor
-from src.query_handler import QueryHandler
+from src.retrieval_handler import RetrievalHandler
 
 # Configure logging
 logger.remove()  # Remove default handler
@@ -17,46 +17,59 @@ logger.add(
 )
 
 # Initialize MCP server
-mcp = FastMCP(name="PDF Query Server")
+mcp = FastMCP(name="PDF Retrieval Server")
 
-# Global instances (initialized at startup)
+# Global instances (initialized on first query)
 pdf_processor: PDFProcessor = None
-query_handler: QueryHandler = None
+retrieval_handler: RetrievalHandler = None
 
 
 @mcp.tool()
-def query_pdf(question: str) -> str:
+def retrieve_pdf_chunks(query: str, max_chunks: int = 5) -> str:
     """
-    Query PDF documents and get structured answers with source citations.
+    Retrieve relevant chunks from indexed PDF documents.
+    
+    This tool performs semantic search over PDF documents and returns
+    the most relevant text chunks. The calling agent can then use these
+    chunks to answer questions or perform analysis.
     
     Args:
-        question: The question to ask about the PDF documents.
+        query: The search query to find relevant document chunks.
+        max_chunks: Maximum number of chunks to return (default: 5).
         
     Returns:
-        JSON string containing the answer, sources, and confidence score.
+        JSON string containing:
+        - query: The original search query
+        - chunks: List of relevant document chunks with:
+          - content: The text content
+          - document_name: Source PDF filename
+          - page_number: Page number (if available)
+          - metadata: Additional metadata
+        - total_chunks: Number of chunks returned
         
     Example:
-        >>> query_pdf("What is the main topic of the document?")
+        >>> retrieve_pdf_chunks("machine learning algorithms")
         {
-            "answer": "The main topic is...",
-            "sources": [
+            "query": "machine learning algorithms",
+            "chunks": [
                 {
-                    "document_name": "example.pdf",
-                    "page_number": 1,
-                    "chunk_text": "..."
+                    "content": "Machine learning algorithms can be categorized...",
+                    "document_name": "ml_guide.pdf",
+                    "page_number": 12,
+                    "metadata": {"source": "ml_guide.pdf"}
                 }
             ],
-            "confidence_score": 0.85
+            "total_chunks": 1
         }
     """
     try:
         # Lazy initialization on first query
-        if query_handler is None:
+        if retrieval_handler is None:
             logger.info("First query received - initializing server...")
             initialize_server()
         
-        # Process query
-        response = query_handler.query(question)
+        # Retrieve chunks
+        response = retrieval_handler.retrieve(query, max_chunks)
         
         # Return as JSON string
         return response.model_dump_json(indent=2)
@@ -65,21 +78,21 @@ def query_pdf(question: str) -> str:
         logger.error(f"Validation error: {e}")
         return f'{{"error": "Validation error: {str(e)}"}}'
     except Exception as e:
-        logger.error(f"Error processing query: {e}")
+        logger.error(f"Error retrieving chunks: {e}")
         return f'{{"error": "Internal error: {str(e)}"}}'
 
 
 def initialize_server():
-    """Initialize PDF processor and query handler (lazy - called on first query)."""
-    global pdf_processor, query_handler
+    """Initialize PDF processor and retrieval handler (lazy - called on first query)."""
+    global pdf_processor, retrieval_handler
     
-    if query_handler is not None:
+    if retrieval_handler is not None:
         # Already initialized
         return
     
     try:
         logger.info("=" * 60)
-        logger.info("PDF MCP Server - Initializing (first query)")
+        logger.info("PDF Retrieval Server - Initializing (first query)")
         logger.info("=" * 60)
         
         # Validate configuration
@@ -96,12 +109,12 @@ def initialize_server():
         logger.info("Loading and indexing PDF documents...")
         pdf_processor.load_and_index_pdfs()
         
-        # Initialize query handler
-        logger.info("Initializing query handler...")
-        query_handler = QueryHandler(pdf_processor)
+        # Initialize retrieval handler
+        logger.info("Initializing retrieval handler...")
+        retrieval_handler = RetrievalHandler(pdf_processor)
         
         logger.info("=" * 60)
-        logger.info("PDF MCP Server - Ready")
+        logger.info("PDF Retrieval Server - Ready")
         logger.info("=" * 60)
         
     except Exception as e:
@@ -111,7 +124,8 @@ def initialize_server():
 
 if __name__ == "__main__":
     logger.info("=" * 60)
-    logger.info("PDF MCP Server - Starting")
+    logger.info("PDF Retrieval Server - Starting")
+    logger.info("Pure retrieval mode - returns chunks for agent processing")
     logger.info("PDF documents will be loaded on first query")
     logger.info("=" * 60)
     

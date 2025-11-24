@@ -1,41 +1,41 @@
-"""Pydantic models for structured JSON responses."""
+"""Response models for PDF retrieval."""
 
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
-class Source(BaseModel):
-    """Represents a source citation for an answer."""
+class DocumentChunk(BaseModel):
+    """Represents a retrieved document chunk."""
     
-    document_name: str = Field(..., description="Name of the PDF document")
+    content: str = Field(..., description="The text content of the chunk")
+    document_name: str = Field(..., description="Name of the source PDF document")
     page_number: Optional[int] = Field(None, description="Page number in the document")
-    chunk_text: Optional[str] = Field(None, description="Relevant text chunk from the source")
+    metadata: dict = Field(default_factory=dict, description="Additional metadata")
 
 
-class QueryResponse(BaseModel):
-    """Structured response for PDF queries."""
+class RetrievalResponse(BaseModel):
+    """Response containing retrieved document chunks."""
     
-    answer: str = Field(..., description="The answer to the user's question")
-    sources: List[Source] = Field(default_factory=list, description="List of source citations")
-    confidence_score: Optional[float] = Field(
-        None, 
-        ge=0.0, 
-        le=1.0, 
-        description="Confidence score of the answer (0.0 to 1.0)"
+    query: str = Field(..., description="The original search query")
+    chunks: List[DocumentChunk] = Field(
+        default_factory=list,
+        description="List of relevant document chunks"
     )
+    total_chunks: int = Field(..., description="Total number of chunks retrieved")
     
     model_config = {
         "json_schema_extra": {
             "example": {
-                "answer": "The capital of France is Paris.",
-                "sources": [
+                "query": "What is machine learning?",
+                "chunks": [
                     {
-                        "document_name": "geography.pdf",
-                        "page_number": 42,
-                        "chunk_text": "Paris is the capital and largest city of France..."
+                        "content": "Machine learning is a subset of artificial intelligence...",
+                        "document_name": "ai_basics.pdf",
+                        "page_number": 5,
+                        "metadata": {"source": "ai_basics.pdf"}
                     }
                 ],
-                "confidence_score": 0.95
+                "total_chunks": 1
             }
         }
     }

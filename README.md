@@ -1,19 +1,19 @@
-# PDF MCP Server
+# PDF Retrieval MCP Server
 
-A Model Context Protocol (MCP) server for querying PDF documents using AI-powered retrieval-augmented generation (RAG).
+A Model Context Protocol (MCP) server for retrieving relevant chunks from PDF documents using hybrid search (BM25 + Vector Search).
 
 ## 🚀 Features
 
 - **PDF Document Processing**: Automatic parsing and indexing of PDF files using Docling
-- **Hybrid Retrieval**: Combines BM25 and vector search for accurate information retrieval
-- **Structured Responses**: Returns JSON with answers, source citations, and confidence scores
-- **MCP Integration**: Exposes `query_pdf` tool via FastMCP for seamless integration
+- **Hybrid Retrieval**: Combines BM25 (keyword) and vector search (semantic) for accurate retrieval
+- **Pure Retrieval Mode**: Returns raw document chunks for agent processing (no LLM answer generation)
+- **MCP Integration**: Exposes `retrieve_pdf_chunks` tool via FastMCP for seamless agent integration
 
 ## 📋 Prerequisites
 
 - Python 3.11 or later
-- OpenAI API key
-- PDF documents to query
+- OpenAI API key (for embeddings only)
+- PDF documents to index
 
 ## 🛠️ Installation
 
@@ -77,32 +77,38 @@ python main.py
 ```
 
 The server will:
-1. Validate configuration
-2. Load and index all PDF files from the `documents/` directory
-3. Build hybrid retriever (BM25 + Vector Search)
-4. Start the MCP server
+1. Start immediately (lazy initialization)
+2. Load and index PDFs on first query
+3. Be ready to retrieve document chunks via MCP
 
-### Using the `query_pdf` Tool
+### Using the `retrieve_pdf_chunks` Tool
 
-The server exposes a single MCP tool: `query_pdf(question: str) -> str`
+The server exposes a single MCP tool: `retrieve_pdf_chunks(query: str, max_chunks: int = 5) -> str`
 
 **Example Query:**
 ```python
-query_pdf("What is the main topic of this document?")
+retrieve_pdf_chunks("machine learning algorithms", max_chunks=3)
 ```
 
 **Example Response:**
 ```json
 {
-  "answer": "The main topic is artificial intelligence and machine learning...",
-  "sources": [
+  "query": "machine learning algorithms",
+  "chunks": [
     {
-      "document_name": "ai_research.pdf",
-      "page_number": 1,
-      "chunk_text": "Artificial intelligence (AI) is the simulation of human intelligence..."
+      "content": "Machine learning algorithms can be categorized into supervised, unsupervised, and reinforcement learning...",
+      "document_name": "ml_guide.pdf",
+      "page_number": 12,
+      "metadata": {"source": "ml_guide.pdf"}
+    },
+    {
+      "content": "Common supervised learning algorithms include linear regression, decision trees, and neural networks...",
+      "document_name": "ml_guide.pdf",
+      "page_number": 15,
+      "metadata": {"source": "ml_guide.pdf"}
     }
   ],
-  "confidence_score": 0.85
+  "total_chunks": 2
 }
 ```
 
@@ -110,29 +116,60 @@ query_pdf("What is the main topic of this document?")
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `answer` | string | Generated answer to the question |
-| `sources` | array | List of source citations with document name, page number, and relevant text |
-| `confidence_score` | float | Estimated confidence (0.0 to 1.0) |
+| `query` | string | The original search query |
+| `chunks` | array | List of relevant document chunks |
+| `chunks[].content` | string | The text content of the chunk |
+| `chunks[].document_name` | string | Source PDF filename |
+| `chunks[].page_number` | int | Page number (if available) |
+| `chunks[].metadata` | object | Additional metadata |
+| `total_chunks` | int | Number of chunks returned |
+
+### How Agents Use This
+
+When an agent (like Claude) calls this tool:
+1. Agent sends a search query
+2. Server returns relevant document chunks
+3. Agent uses chunks in its context to answer questions
+
+**Example Agent Flow:**
+```
+User: "What are the main ML algorithms discussed?"
+  ↓
+Agent calls: retrieve_pdf_chunks("machine learning algorithms")
+  ↓
+Server returns: 3 relevant chunks from PDFs
+  ↓
+Agent reads chunks and generates answer for user
+```
 
 ## 🏗️ Architecture
 
 ```
 pdf_mcpserver/
 ├── src/
-│   ├── config.py           # Configuration management
-│   ├── models.py           # Pydantic models for responses
-│   ├── pdf_processor.py    # PDF loading and indexing
-│   └── query_handler.py    # Query processing and LLM integration
-├── main.py                 # MCP server entry point
-├── requirements.txt        # Python dependencies
-└── .env                    # Environment configuration
+│   ├── config.py              # Configuration management
+│   ├── constants.py           # Configuration constants
+│   ├── models.py              # Pydantic response models
+│   ├── pdf_processor.py       # PDF loading and hybrid retrieval
+│   └── retrieval_handler.py   # Document chunk retrieval
+├── main.py                    # MCP server entry point
+├── pyproject.toml             # Project metadata
+└── .env                       # Environment configuration
 ```
 
 ### Key Components
 
-- **PDFProcessor**: Singleton class that loads PDFs, converts to Markdown using Docling, and builds hybrid retriever
-- **QueryHandler**: Processes queries, retrieves relevant chunks, and generates answers using OpenAI GPT-4o-mini
-- **FastMCP**: MCP server framework that exposes the `query_pdf` tool
+- **PDFProcessor**: Singleton class that loads PDFs, converts to Markdown using Docling, and builds hybrid retriever (BM25 + Vector Search)
+- **RetrievalHandler**: Retrieves relevant chunks for queries - no LLM answer generation
+- **FastMCP**: MCP server framework that exposes the `retrieve_pdf_chunks` tool
+
+### Why Pure Retrieval?
+
+This design allows calling agents (Claude, GPT, etc.) to:
+- Use their own LLM for answer generation
+- Have full control over the reasoning process
+- Avoid redundant LLM calls
+- Reduce costs and latency
 
 ## 🔧 Configuration
 
@@ -178,8 +215,8 @@ uv run pytest tests/
 - **fastmcp**: MCP server framework
 - **docling**: Document processing and parsing
 - **chromadb**: Vector database for embeddings
-- **langchain**: RAG framework
-- **openai**: LLM provider
+- **langchain**: RAG framework and retrievers
+- **openai**: Embeddings only (text-embedding-3-small)
 - **loguru**: Logging
 
 ## 🤝 Contributing
